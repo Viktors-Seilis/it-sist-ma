@@ -1,0 +1,59 @@
+version: '3'
+services:
+    is_db:
+        build:
+            context: ./postgres
+        restart: always
+        volumes:
+            - ./postgres_data:/var/lib/postgresql/data
+            - ./db_data/latest.sql:/docker-entrypoint-initdb.d/latest.sql
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+        logging:
+            options:
+                max-size: 10m
+                max-file: "3"
+        ports:
+            - '5438:5432'
+        networks:
+            - my-network-name
+    frontend:
+        build: ./vue
+        volumes:
+            - ./vue:/app/vue
+            - /app/vue/node_modules
+        environment:
+            NODE_ENV: development
+        command: "npm run serve"
+        ports:
+            - 8080:8080
+        networks:
+            - my-network-name
+    backend:
+        build:
+            context: ./laravel
+        # this way container interacts with host on behalf of current user.
+        # !!! NOTE: $UID is a _shell_ variable, not an environment variable!
+        # To make it available as a shell var, make sure you have this in your ~/.bashrc (./.zshrc etc):
+        # export UID="$UID"
+        user: ${UID}:${UID}
+
+        volumes:
+            - ./laravel:/app/laravel
+            - /app/laravel/vendor
+            # custom adjustments to php.ini
+            # i. e. "xdebug.remote_host" to debug the dockerized app
+            - ./etc/php:/usr/local/etc/php/local.conf.d/
+        ports:
+            - 8000:8000
+        networks:
+            - my-network-name
+        environment:
+            # add our custom config files for the php to scan
+            PHP_INI_SCAN_DIR: "/usr/local/etc/php/conf.d/:/usr/local/etc/php/local.conf.d/"
+        command: "sh init.sh"
+networks:
+    my-network-name:
+        name: my-network-name
+        driver: bridge
